@@ -24,17 +24,26 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '7.0.x'
+          dotnet-version: '9.0.x'
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2.0.0
+
+      - name: Update packages with dotnet-outdated tool
+        shell: pwsh
+        run: |
+          dotnet tool install --global dotnet-outdated-tool
+          dotnet-outdated --upgrade UUPMediaCreator.sln --version-lock Minor --recursive
+
+      - name: Restore .NET dependencies
+        run: dotnet restore UUPMediaCreator.sln
 
       - name: Build and Publish for ${{ matrix.rid }}
         shell: pwsh
         run: |
           $publishDir = "${{ github.workspace }}/publish_output/${{ matrix.rid }}/CLI"
           New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
-          msbuild /m /t:restore,cli\uupmediaconverter:publish,cli\uupdownload:publish `
+          msbuild /m /t:cli\uupmediaconverter:publish,cli\uupdownload:publish `
             /p:Configuration=Release `
             /p:Platform=${{ matrix.msbuild_platform }} `
             /p:RuntimeIdentifier=${{ matrix.rid }} `
@@ -47,13 +56,8 @@ jobs:
             /p:DebugSymbols=false `
             UUPMediaCreator.sln
 
-      - name: Create Zip Archive for ${{ matrix.rid }}
-        shell: pwsh
-        run: |
-          Compress-Archive -Path "${{ github.workspace }}/publish_output/${{ matrix.rid }}/CLI/*" -DestinationPath "${{ github.workspace }}/UUPMediaCreator-${{ matrix.rid }}.zip" -Force
-
       - name: Upload Artifact for ${{ matrix.rid }}
         uses: actions/upload-artifact@v4
         with:
           name: UUPMediaCreator-${{ matrix.rid }}
-          path: ${{ github.workspace }}/UUPMediaCreator-${{ matrix.rid }}.zip
+          path: ${{ github.workspace }}/publish_output/${{ matrix.rid }}/CLI
