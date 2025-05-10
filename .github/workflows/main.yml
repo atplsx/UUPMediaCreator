@@ -1,0 +1,59 @@
+name: Build UUPMediaCreator
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            msbuild_platform: x64
+          - rid: win-arm64
+            msbuild_platform: arm64
+          - rid: linux-x64
+            msbuild_platform: x64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2.0.0
+
+      - name: Build and Publish for ${{ matrix.rid }}
+        shell: pwsh
+        run: |
+          $publishDir = "${{ github.workspace }}/publish_output/${{ matrix.rid }}/CLI"
+          New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+          msbuild /m /t:restore,cli\uupmediaconverter:publish,cli\uupdownload:publish `
+            /p:Configuration=Release `
+            /p:Platform=${{ matrix.msbuild_platform }} `
+            /p:RuntimeIdentifier=${{ matrix.rid }} `
+            /p:PublishDir=$publishDir `
+            /p:PublishSingleFile=true `
+            /p:SelfContained=true `
+            /p:PublishTrimmed=true `
+            /p:EnableCompressionInSingleFile=true `
+            /p:DebugType=None `
+            /p:DebugSymbols=false `
+            UUPMediaCreator.sln
+
+      - name: Create Zip Archive for ${{ matrix.rid }}
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "${{ github.workspace }}/publish_output/${{ matrix.rid }}/CLI/*" -DestinationPath "${{ github.workspace }}/UUPMediaCreator-${{ matrix.rid }}.zip" -Force
+
+      - name: Upload Artifact for ${{ matrix.rid }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: UUPMediaCreator-${{ matrix.rid }}
+          path: ${{ github.workspace }}/UUPMediaCreator-${{ matrix.rid }}.zip
